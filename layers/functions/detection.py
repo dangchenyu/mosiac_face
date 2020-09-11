@@ -72,9 +72,13 @@ class Detect(Function):
                 boxes = decoded_boxes[l_mask].view(-1, 4)
                 # idx of highest scoring and non-overlapping boxes per class
                 #t3 = time.time()
-                ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+                try:
+                    ids, count = nms(boxes, scores, self.nms_thresh, self.top_k)
+                    output[i, cl, :count] = torch.cat((scores[ids[:count]].unsqueeze(1), boxes[ids[:count]]), 1)
+
+                except ValueError:
+                    output=output
                 #t4 = time.time()
-                output[i, cl, :count] = torch.cat((scores[ids[:count]].unsqueeze(1), boxes[ids[:count]]), 1)
         #t2 = time.time()
         #print ("decode : " , t4-t3)
         flt = output.contiguous().view(num, -1, 5)

@@ -32,6 +32,8 @@ parser.add_argument('--save_folder', default='eval_tools/light_DSFD/', type=str,
                     help='mosaiced img folder ')
 parser.add_argument('--visual_threshold', default=0.9, type=float,
                     help='Final confidence threshold')
+parser.add_argument('--area_scale', default=1.25, type=float,
+                    help='scale of mosaic area')
 parser.add_argument('--cuda', default=True, type=bool,
                     help='Use cuda to train model')
 parser.add_argument('--video_folder', default='', type=str,
@@ -128,17 +130,29 @@ def infer(net, img, transform, thresh, cuda, shrink):
         return det
 
 
-def save_mosaiced_img(im, dets, save_folder,image_name, frame_id,thresh=0.5):
+def save_mosaiced_img(im, dets, save_folder, image_name, frame_id, scale=1.25,thresh=0.5):
     """Draw detected bounding boxes."""
     class_name = 'face'
     inds = np.where(dets[:, -1] >= thresh)[0]
+    img_height = im.shape[0]
+    img_width = im.shape[1]
+    mask_img = np.ones(im.shape, np.int8)
+    kernel_size = 15
+    blur_img = cv2.blur(im, (kernel_size, kernel_size))
     if len(inds) == 0:
         return
     print(len(inds))
     for i in inds:
         bbox = dets[i, :4]
         score = dets[i, -1]
-        do_mosaic(im, int(bbox[0]), int(bbox[1]), int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1]))
+        mask = generate_mask(img_height, img_width, (max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])) / 2) * scale,
+                             int(bbox[0]) + int(bbox[2] - bbox[0]) / 2, int(bbox[1]) + int(bbox[3] - bbox[1]) / 2)
+        mask_img[mask] = [0, 0, 0]
+
+        mask_img_verse = np.ones(im.shape, np.int8) - mask_img
+
+        result_img = np.multiply(im, mask_img) + mask_img_verse * blur_img
+        # do_mosaic(im, int(bbox[0]), int(bbox[1]), int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1]))
 
         '''
         ax.text(bbox[0], bbox[1] - 5,
@@ -149,7 +163,18 @@ def save_mosaiced_img(im, dets, save_folder,image_name, frame_id,thresh=0.5):
 
     # cv2.imshow('test', im)
     # cv2.waitKey()
-    cv2.imwrite(save_folder+image_name+'_'+'{:09d}.jpg'.format(frame_id),im)
+    cv2.imwrite(save_folder + image_name + '_' + '{:09d}.jpg'.format(frame_id), result_img)
+
+
+def generate_mask(img_height, img_width, radius, center_x, center_y):
+    y, x = np.ogrid[0:img_height, 0:img_width]
+    # circle mask
+    mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= radius ** 2
+    # generate other masks （eg. heart-shaped）
+    # scale = 5 / radius
+    # mask = 5 * ((-x + center_x) * scale) ** 2 - 6 * np.abs((-x + center_x) * scale) * ((-y + center_y) * scale) + 5 * (
+    #             (-y + center_y) * scale) ** 2 < 128
+    return mask
 
 
 def do_mosaic(frame, x, y, w, h, neighbor=9):
@@ -163,8 +188,10 @@ def do_mosaic(frame, x, y, w, h, neighbor=9):
             left_up = (rect[0], rect[1])
             right_down = (rect[0] + neighbor - 1, rect[1] + neighbor - 1)
             cv2.rectangle(frame, left_up, right_down, color, -1)
-def make_video_from_images(save_folder,img_paths, outvid_path, fps=25, size=None,
-               is_color=True, format="H264"):
+
+
+def make_video_from_images(save_folder, img_paths, outvid_path, fps=25, size=None,
+                           is_color=True, format="H264"):
     """
     Create a video from a list of images.
 
@@ -183,7 +210,7 @@ def make_video_from_images(save_folder,img_paths, outvid_path, fps=25, size=None
     fourcc = cv2.VideoWriter_fourcc(*format)
     vid = None
     for ct, img_path in enumerate(img_paths):
-        img = cv2.imread(save_folder+img_path)
+        img = cv2.imread(save_folder + img_path)
         if img is None:
             print(img_path)
             continue
@@ -198,11 +225,15 @@ def make_video_from_images(save_folder,img_paths, outvid_path, fps=25, size=None
     if vid is not None:
         vid.release()
     return vid
+
+
 def delete_imgs(img_folder):
-    img_list=os.listdir(img_folder)
+    img_list = os.listdir(img_folder)
     for img in img_list:
-        os.remove(img_folder+img)
+        os.remove(img_folder + img)
     return print('imgs of last video have been removed')
+
+
 def main():
     # load net
     shrink = 1
@@ -224,29 +255,32 @@ def main():
     transform = TestBaseTransform((104, 117, 123))
     thresh = cfg['conf_thresh']
 
-    save_folder=args.save_folder
+    save_folder = args.save_folder
 
-    video_folder_list=os.listdir(args.video_folder)
+    video_folder_list = os.listdir(args.video_folder)
     for video in video_folder_list:
-        frame_id=0
-        video_name=os.path.splitext(os.path.split(video)[1])[0]
-        cap=cv2.VideoCapture(args.video_folder+video)
+        frame_id = 0
+        video_name = os.path.splitext(os.path.split(video)[1])[0]
+        cap = cv2.VideoCapture(args.video_folder + video)
         while True:
             _, frame = cap.read()
             if not _:
                 break
-            frame_id+=1
+            frame_id += 1
+            # if frame_id<=1358:
+            #     continue
             det = infer(net, frame, transform, thresh, cuda, shrink)
-            print('prossing:',frame_id)
-            if det[0][0]==0.1:
+            print('prossing:', frame_id)
+            if det[0][0] == 0.1:
                 cv2.imwrite(save_folder + video_name + '_' + '{:09d}.jpg'.format(frame_id), frame)
-            save_mosaiced_img(frame, det, save_folder,video_name, frame_id,0.9)
-        save_folder_list=os.listdir(save_folder)
+            save_mosaiced_img(frame, det, save_folder, video_name, frame_id, scale=args.area_scale,thresh=args.visual_threshold)
+        save_folder_list = os.listdir(save_folder)
         save_folder_list.sort()
-        make_video_from_images(save_folder,save_folder_list,
-                           os.path.join(args.video_output, video_name+'.mp4'),
-                           fps=60)
+        make_video_from_images(save_folder, save_folder_list,
+                               os.path.join(args.video_output, video_name + '.mp4'),
+                               fps=60)
         delete_imgs(save_folder)
+
 
 if __name__ == '__main__':
     main()

@@ -104,6 +104,6 @@ widerface_640 = {
     'negpos_ratio':3 , 
     # test
     'nms_thresh':0.3 ,
-    'conf_thresh':0.6 ,
+    'conf_thresh':0.95 ,
     'num_thresh':100 ,
 }
