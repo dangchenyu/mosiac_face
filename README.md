@@ -1,14 +1,27 @@
-# lightDSFD
+# Mosaic Face
 
-By [Jian Li](https://lijiannuist.github.io/)
 
 ## Introduction
-We propose lightDSFD based on [DSFD](https://arxiv.org/abs/1810.10220).
-the original DSFD code is [here](https://github.com/TencentYoutuResearch/FaceDetection-DSFD).
-
-On Nvidia Tesla P40，the time of network is 13ms. 
+Mosaic pedestrians' faces for protecting their pravicy.
 
 
-模型 NMS_Params|Easy Set|Medium Set|Hard Set
-------|--------|----------|--------
-lightDSFD,thresh=0.05,number=500|0.891 |0.864       |0.469
+## Usage
+Run test.py and change parameters of save_folder, video_folder, and video_output with your own configuration. 
+
+Arguments are listed below:
+parser.add_argument('--trained_model', default='weights/light_DSFD.pth',
+                    type=str, help='Trained state_dict file path to open')
+parser.add_argument('--save_folder', default='eval_tools/light_DSFD/', type=str,
+                    help='mosaiced img saving folder')
+parser.add_argument('--visual_threshold', default=0.9, type=float,
+                    help='Final confidence threshold')
+parser.add_argument('--area_scale', default=1.25, type=float,
+                    help='scale of mosaic area')
+parser.add_argument('--cuda', default=True, type=bool,
+                    help='If use cuda')
+parser.add_argument('--video_folder', default='', type=str,
+                    help='origin video folder')
+parser.add_argument('--widerface_root', default=WIDERFace_ROOT, help='Location of VOC root directory')
+parser.add_argument('--video_output', default='/home/rvlab/Desktop/', type=str,
+                    help='processed video folder ')
+
